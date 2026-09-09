@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Keeper = require("../models/Keeper");
+const Farm = require("../models/Farm");
 
 // POST /api/keepers - register a new keeper
 router.post("/", async (req, res) => {
@@ -23,6 +24,26 @@ router.get("/:id", async (req, res) => {
   const keeper = await Keeper.findById(req.params.id);
   if (!keeper) return res.status(404).json({ error: "Keeper not found" });
   res.json(keeper);
+});
+
+// GET /api/keepers/by-code/:keeperCode/farms - "portal 2 login" lookup by the
+// human-friendly keeperCode (e.g. KPR-0001) instead of the raw MongoDB _id.
+// NOTE: this is ID lookup only, not authentication - anyone who knows a
+// keeperCode can currently see this data. Add a real login step (e.g. phone
+// + OTP) before this goes anywhere beyond a prototype.
+router.get("/by-code/:keeperCode/farms", async (req, res) => {
+  const keeper = await Keeper.findOne({ keeperCode: req.params.keeperCode });
+  if (!keeper) return res.status(404).json({ error: "Keeper not found" });
+  const farms = await Farm.find({ keeper: keeper._id }).sort({ createdAt: -1 });
+  res.json({ keeper, farms });
+});
+
+// GET /api/keepers/:id/farms - all farms belonging to this keeper (one keeper, many farms)
+router.get("/:id/farms", async (req, res) => {
+  const keeper = await Keeper.findById(req.params.id);
+  if (!keeper) return res.status(404).json({ error: "Keeper not found" });
+  const farms = await Farm.find({ keeper: req.params.id }).sort({ createdAt: -1 });
+  res.json({ keeper, farms });
 });
 
 // PATCH /api/keepers/:id

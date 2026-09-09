@@ -14,6 +14,7 @@ const yieldRoutes = require("./src/routes/yieldRoutes");
 const batchRoutes = require("./src/routes/batchRoutes");
 const labRoutes = require("./src/routes/labRoutes");
 const qrRoutes = require("./src/routes/qrRoutes");
+const authRoutes = require("./src/routes/authRoutes");
 
 const app = express();
 
@@ -24,6 +25,9 @@ app.use(morgan("dev"));
 app.get("/", (_req, res) => {
   res.json({ status: "ok", service: "beekeeping-backend", mode: "prototype" });
 });
+
+// Auth (phone + OTP login, JWT issued per device)
+app.use("/api/auth", authRoutes);
 
 // Portal 1 - Productivity & Health Dashboard
 app.use("/api/keepers", keeperRoutes);
@@ -51,6 +55,9 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 (async () => {
+  if (!process.env.JWT_SECRET) {
+    console.warn("[server] WARNING: JWT_SECRET is not set - auth routes will fail. Set it in .env");
+  }
   await connectDB();
   app.listen(PORT, () => {
     console.log(`[server] beekeeping-backend running on port ${PORT}`);

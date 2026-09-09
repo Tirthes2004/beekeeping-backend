@@ -37,13 +37,43 @@ configurable via `SIMULATOR_INTERVAL_CRON`; set `SIMULATOR_ENABLED=false` to dis
 
 ## API Endpoints
 
+### Auth — phone + OTP login (multi-device)
+
+Login is phone-number + OTP based (no password), which suits a mostly-mobile,
+rural/semi-urban keeper audience better than passwords. OTP delivery is
+**mocked** — codes are logged to the server console instead of sent via SMS,
+same "mock now, swap later" pattern as the lab/IoT services (real integration
+point: `src/services/otpService.js`).
+
+- `POST /api/auth/request-otp` — body: `{ phone }`. Phone must already belong
+  to a registered Keeper. Generates and "sends" (console-logs) a 6-digit code,
+  valid for `OTP_EXPIRES_MINUTES` (default 5).
+- `POST /api/auth/verify-otp` — body: `{ phone, code }`. On success, returns
+  `{ token, keeper }`. The token is a JWT valid for `JWT_EXPIRES_IN` (default 30 days).
+- `GET /api/auth/me` — requires `Authorization: Bearer <token>`. Returns the
+  logged-in keeper plus their farms, without the caller needing to know their
+  own database ID.
+
+**Multi-device:** each `verify-otp` call issues an independent token, so a
+keeper can be logged in on several phones/devices simultaneously — logging in
+on a new device doesn't invalidate any other device's session. Set `JWT_SECRET`
+in `.env` before using auth routes (a startup warning fires if it's missing).
+
+The earlier `GET /api/keepers/:id/farms` and `GET /api/keepers/by-code/:keeperCode/farms`
+endpoints still work (useful for admin/demo lookups) but are unauthenticated —
+prefer `GET /api/auth/me` for anything acting as the logged-in keeper.
+
 ### Portal 1 — Productivity & Health
 
 **Keepers**
 - `POST /api/keepers` — register a keeper
 - `GET /api/keepers` — list keepers
 - `GET /api/keepers/:id`
+- `GET /api/keepers/:id/farms` — all farms belonging to this keeper (one keeper, many farms)
+- `GET /api/keepers/by-code/:keeperCode/farms` — same, looked up by the human-friendly `keeperCode` (e.g. `KPR-0001`) instead of the raw MongoDB `_id`. This is the natural fit for a Portal 2 "login by keeper ID" screen.
 - `PATCH /api/keepers/:id`
+
+> **No authentication yet.** All keeper/farm lookups above are ID lookups only — there's no password or OTP check. Anyone who knows a `keeperCode` can currently pull that keeper's farms. Fine for a prototype demo; add a real login step (phone + OTP is the natural fit for this audience) before using this beyond a demo.
 
 **Farms**
 - `POST /api/farms` — create a farm (linked to a keeper)
@@ -72,7 +102,7 @@ configurable via `SIMULATOR_INTERVAL_CRON`; set `SIMULATOR_ENABLED=false` to dis
 ### Portal 2 — Brand & QR Traceability
 
 **Batches**
-- `POST /api/batches` — create a harvest batch
+- `POST /api/batches` — create a harvest batch (rejects if the given `farm` doesn't actually belong to the given `keeper`)
 - `GET /api/batches?farmId=&keeperId=`
 - `GET /api/batches/:id`
 - `PATCH /api/batches/:id` — e.g. update price
@@ -96,7 +126,12 @@ Farm 1---* Batch 1---1 LabReport
 ## Demo script suggestion
 
 1. Create a Keeper, a Farm under them, and 2-3 Hives under that farm.
-2. Let the simulator run a few ticks (or lower `SIMULATOR_INTERVAL_CRON` to `*/1 * * * *`
+2. Log in as that keeper: `POST /api/auth/request-otp` with their phone, check
+   the server console for the mocked code, then `POST /api/auth/verify-otp`
+   to get a token. Use `GET /api/auth/me` (with `Authorization: Bearer <token>`)
+   to show their farms without passing any ID manually — this is what a real
+   login screen would call.
+3. Let the simulator run a few ticks (or lower `SIMULATOR_INTERVAL_CRON` to `*/1 * * * *`
    for a faster demo) — watch `GET /api/sensors/latest/:hiveId` update and occasional
    `GET /api/alerts` entries appear.
 3. Call `POST /api/yield/estimate` to show the yield projection.
