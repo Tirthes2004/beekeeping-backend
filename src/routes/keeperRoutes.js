@@ -2,11 +2,51 @@ const express = require("express");
 const router = express.Router();
 const Keeper = require("../models/Keeper");
 const Farm = require("../models/Farm");
+const otpService = require("../services/otpService");
 
-// POST /api/keepers - register a new keeper
+function registrationData(body) {
+  return {
+    keeperCode: body.keeperCode,
+    name: body.name,
+    phone: body.phone,
+    email: body.email,
+    address: body.address,
+  };
+}
+
+// POST /api/keepers - validate keeper details and send a registration OTP
 router.post("/", async (req, res) => {
   try {
-    const keeper = await Keeper.create(req.body);
+    const data = registrationData(req.body);
+    await new Keeper(data).validate();
+
+    const existingKeeper = await Keeper.findOne({
+      $or: [{ keeperCode: data.keeperCode }, { phone: data.phone }],
+    });
+    if (existingKeeper) {
+      return res.status(409).json({ error: "A keeper is already registered with this keeper code or phone number" });
+    }
+
+    const result = await otpService.sendOtp(data.phone, "registration", data);
+    res.status(202).json({
+      message: "Registration OTP sent (check server console in this prototype)",
+      ...result,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/keepers/verify-registration - body: { phone, code }
+router.post("/verify-registration", async (req, res) => {
+  try {
+    const { phone, code } = req.body;
+    if (!phone || !code) return res.status(400).json({ error: "phone and code are required" });
+
+    const otp = await otpService.verifyOtp(phone, code, "registration");
+    if (!otp) return res.status(401).json({ error: "Invalid or expired OTP" });
+
+    const keeper = await Keeper.create(otp.registrationData);
     res.status(201).json(keeper);
   } catch (err) {
     res.status(400).json({ error: err.message });

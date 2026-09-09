@@ -66,7 +66,8 @@ prefer `GET /api/auth/me` for anything acting as the logged-in keeper.
 ### Portal 1 — Productivity & Health
 
 **Keepers**
-- `POST /api/keepers` — register a keeper
+- `POST /api/keepers` — submit the usual keeper details (`keeperCode`, `name`, `phone`, optional `email` and `address`) and receive a registration OTP
+- `POST /api/keepers/verify-registration` — body: `{ phone, code }`; verifies the OTP and creates the keeper
 - `GET /api/keepers` — list keepers
 - `GET /api/keepers/:id`
 - `GET /api/keepers/:id/farms` — all farms belonging to this keeper (one keeper, many farms)
