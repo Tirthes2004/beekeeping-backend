@@ -63,6 +63,38 @@ The earlier `GET /api/keepers/:id/farms` and `GET /api/keepers/by-code/:keeperCo
 endpoints still work (useful for admin/demo lookups) but are unauthenticated —
 prefer `GET /api/auth/me` for anything acting as the logged-in keeper.
 
+### Registration - phone OTP verification
+
+Keeper registration uses the same mocked OTP delivery as login. Submit the
+normal keeper details first; the keeper record is created only after its OTP is
+verified. Registration and login OTPs are separate and cannot be used
+interchangeably.
+
+1. `POST /api/keepers`
+
+   ```json
+   {
+     "keeperCode": "KPR-1001",
+     "name": "Rahul Kumar",
+     "phone": "9876543210",
+     "email": "rahul@example.com",
+     "address": "Pune, Maharashtra"
+   }
+   ```
+
+   Returns `202` and logs a six-digit OTP to the backend console.
+
+2. `POST /api/keepers/verify-registration`
+
+   ```json
+   {
+     "phone": "9876543210",
+     "code": "123456"
+   }
+   ```
+
+   Returns `201` with the newly created keeper.
+
 ### Portal 1 — Productivity & Health
 
 **Keepers**
@@ -74,7 +106,8 @@ prefer `GET /api/auth/me` for anything acting as the logged-in keeper.
 - `GET /api/keepers/by-code/:keeperCode/farms` — same, looked up by the human-friendly `keeperCode` (e.g. `KPR-0001`) instead of the raw MongoDB `_id`. This is the natural fit for a Portal 2 "login by keeper ID" screen.
 - `PATCH /api/keepers/:id`
 
-> **No authentication yet.** All keeper/farm lookups above are ID lookups only — there's no password or OTP check. Anyone who knows a `keeperCode` can currently pull that keeper's farms. Fine for a prototype demo; add a real login step (phone + OTP is the natural fit for this audience) before using this beyond a demo.
+> The keeper/farm lookup endpoints above are public ID lookups. Use
+> `GET /api/auth/me` with a login token for logged-in keeper data.
 
 **Farms**
 - `POST /api/farms` — create a farm (linked to a keeper)
@@ -126,17 +159,19 @@ Farm 1---* Batch 1---1 LabReport
 
 ## Demo script suggestion
 
-1. Create a Keeper, a Farm under them, and 2-3 Hives under that farm.
-2. Log in as that keeper: `POST /api/auth/request-otp` with their phone, check
+1. Register a Keeper with `POST /api/keepers`, then verify the registration OTP
+   with `POST /api/keepers/verify-registration`.
+2. Create a Farm under that keeper and 2-3 Hives under that farm.
+3. Log in as that keeper: `POST /api/auth/request-otp` with their phone, check
    the server console for the mocked code, then `POST /api/auth/verify-otp`
    to get a token. Use `GET /api/auth/me` (with `Authorization: Bearer <token>`)
    to show their farms without passing any ID manually — this is what a real
    login screen would call.
-3. Let the simulator run a few ticks (or lower `SIMULATOR_INTERVAL_CRON` to `*/1 * * * *`
+4. Let the simulator run a few ticks (or lower `SIMULATOR_INTERVAL_CRON` to `*/1 * * * *`
    for a faster demo) — watch `GET /api/sensors/latest/:hiveId` update and occasional
    `GET /api/alerts` entries appear.
-3. Call `POST /api/yield/estimate` to show the yield projection.
-4. Create a Batch for the farm, `POST /api/lab/submit/:batchId`, wait a few seconds,
+5. Call `POST /api/yield/estimate` to show the yield projection.
+6. Create a Batch for the farm, `POST /api/lab/submit/:batchId`, wait a few seconds,
    then `GET /api/lab/report/:batchId`.
-5. `POST /api/qr/generate/:batchId`, then open the returned `publicUrl` (or hit
+7. `POST /api/qr/generate/:batchId`, then open the returned `publicUrl` (or hit
    `GET /api/qr/scan/:batchId`) to show the customer-facing view.
